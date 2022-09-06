@@ -1,0 +1,153 @@
+---
+title: "HP_Personality_Plot"
+author: "Karen Sasmita"
+date: "8/19/2022"
+output: html_document
+---
+
+# Load libraries
+
+```{r load_libraries}
+library(dplyr)
+library(ggplot2)
+library(ggimage)
+library(geomtextpath)
+library(jpeg)
+library(showtext)
+library(sysfonts)
+library(ggpubr)
+library(extrafont)
+library(ggtext)
+library(stringr)
+library(pdftools)
+tuesdata <- tidytuesdayR::tt_load('2022-08-16')
+```
+
+# Load fonts 
+
+```{r}
+#load fonts
+font_add_google("Lobster")
+font_add_google("poppins")
+showtext_auto()
+```
+
+# Set plot themes
+
+```{r}
+#colors
+G.red <- "#740001"
+S.green <- "#1A472A"
+H.yellow <- "#e3a000"
+R.blue <- "#0e1a40"
+plt_bg_col <- "#ECE6D3"
+label_line_col <- "#30484b"
+radial_line_col <- "#a67045"
+txt_col <- "#3f3e39"
+fig_bg_col <- "#d8c9ac"
+
+#fonts
+txt_fam <- "poppins"
+title_fam <- "lobster"
+
+```
+
+# Load data and tidy up! 
+
+
+```{r load_data}
+data <- read.csv("hpData_cleaned.csv", head = TRUE)
+
+#List out the personality labels 
+selected_personality = c("bold", "charismatic", "patriotic", "resourceful", "political", "driven", "loyal", "devoted", "workaholic", "knowledgeable", "perceptive", "nerd")
+
+#List out character names
+characters <- c("Harry Potter", "Hermione Granger", "Severus Snape", "Bellatrix Lestrange", "Alastor Moody", "Nymphadora Tonks", "Luna Lovegood", "Cho Chang")
+house = c("[Gryffindor]", "[Gryffindor]", "[Slytherin]", "[Slytherin]","[Hufflepuff]", "[Hufflepuff]", "[Ravenclaw]", "[Ravenclaw]")
+
+#Create dataframe to manually code each personality value with html format. This is to adjust the font for the x-axis labels. geom_textpath could not take in fonts loaded using showtext. 
+selected_personality_label <- unlist(lapply(selected_personality, function(x){paste("<span style= 'color:black;font-family:poppins'>", str_to_title(x), '</span>', sep = "")}))
+
+#Make sure that all variables are in the correct type 
+data$personality_house <- factor(data$personality_house, levels = c("G", "S", "H", "R"))
+data$personality <- factor(data$personality , levels = selected_personality)
+data$char_name <- factor(data$char_name , levels = characters)
+data$img <- unlist(lapply(data$char_name, function(x){paste('/img/', x, '.png', sep = "")}))
+data$ave_rating_scaled <- (data$avg_rating - min(data$avg_rating))/(max(data$avg_rating) - min(data$avg_rating))
+plot_data <- data %>% dplyr::group_by(char_name, personality, personality_house) %>% dplyr::summarise(rating = mean(ave_rating_scaled))
+#plot_data$house <- unlist(lapply(plot_data$char_name, function(x){house[characters==x]}))
+```
+
+
+
+```{r}
+#Create dataframe to draw lines connecting each personality label to the center of the radar plot. 
+line <- data.frame(x = rep(selected_personality, 2), y = c(rep(0, length(selected_personality)*2), rep(c(1.3, 1.6), length(selected_personality))))
+
+#Create dataframe to place house assignment label under each character name 
+house_assignment <- data.frame(char_name = factor(characters, levels = characters), house = house,
+                               x = c(0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5), y = c(2, 2, 2, 2, 2, 2, 2, 2))
+
+#Create data frame to list out the image paths for each character
+hpChar = data.frame(char_name = factor(characters, levels = characters), img = unlist(lapply(characters, function(x){paste('img/', x, '.png', sep = "")})))
+
+#Write title 
+title="<span style='color:black;font-size:30pt;font-family:Lobster'>**Personalities in the Wizarding World.**</span><br><br><span style='font-size:10pt;color:black;font-family:poppins'>Personality ratings (scaled from 0 to 1) of different characters from <span style='color:black;font-family:poppins;font-size:10pt'>**HARRY POTTER**</span><span style='color:#3f3e39;font-family:poppins;font-size:10pt'> [house assignment by the sorting hat].</span><span style ='color:black;font-family:poppins;font-size:10pt'> Each personality trait is attributed to the characteristic description (according to wikipedia and harry potter fandom) of each house: </span><span style= 'color:#740001; font-size:10pt; font-family:poppins'>**Gryffindor**</span><span style='color:black'>, </span><span style= 'color:#1A472A; font-size:10pt; font-family:poppins'>**Slytherin**</span><span style='color:black'>, </span></span><span style= 'color:#e3a000; font-size:10pt; font-family:poppins'>**Hufflepuff**</span><span style='color:black; font-family:poppins; font-size:10pt'>, and </span><span style= 'color:#0e1a40; font-size:10pt; font-family:poppins'>**Ravenclaw**</span><span style='color:black; font-size:10pt; font-family:poppins'>. Data extracted from Open Source Psychometric Project.</span><br>"
+
+
+p <- ggplot(plot_data, aes(x = personality, y = rating)) +
+  geom_bar(stat = "identity", data=data.frame(x=factor(selected_personality, levels = selected_personality), y=rep(1.2,length(selected_personality))),
+             mapping=aes(x=x, y=y),fill= plt_bg_col, alpha = 0.5, position = position_dodge(0.9), width = 1, inherit.aes = FALSE)+
+  scale_y_continuous(limits = c(-0.4, 2), breaks = c(0,0.5,1)) +
+  geom_hline(yintercept = seq(0, 1, by = 0.5), colour = radial_line_col, alpha = 0.8, size = 0.3,linetype = 2)+
+  geom_text(data = house_assignment, aes(x = x, y = y, label = house), y = 2.4, color = txt_col, size = 3.2, family = txt_fam) +
+  # geom_bar(stat = "identity", data=data.frame(x=factor(selected_personality, levels = selected_personality), y=rep(1.1,length(selected_personality))),
+  #            mapping=aes(x=x, y=y),fill="#ECE6D3", alpha = 0.5, position = position_dodge(0.9), width = 1, inherit.aes = FALSE)+
+  #scale_color_manual(values = c(G.red, S.green, H.yellow, R.blue))+
+  scale_fill_manual(values = c(G.red, S.green, H.yellow, R.blue)) +
+  geom_image(data = hpChar_image, aes(x = 1, y = -0.4, image = img), size = 0.12, inherit.aes = FALSE)+
+  geom_hline(yintercept = 0, colour = plt_bg_col, alpha = 1, size = 1)+
+  geom_line(data=line, aes(x=x,y=y, group=x), color=label_line_col,alpha=0.8) +
+  geom_point(data=line[line$y>0,], aes(x=x,y=y, group=x), fill=label_line_col,alpha=0.8, size = 0.5) +
+  geom_bar(stat = "identity", aes(fill = personality_house), color = alpha(plt_bg_col, alpha = 0.35), position = position_dodge2())+
+  #+
+  geom_textpath(data = data.frame(x1 = seq(1, length(selected_personality), by = 1),
+           y1 = rep(c(1.5, 1.8), length(selected_personality)/2),
+           label = selected_personality_label), aes(x = x1, y = y1, label = label), rich = TRUE, linetype = 0, size = 2.2, color = "black",
+           upright = TRUE) +
+  #geom_polygon(fill="#44C7EA", color="#44C7EA", alpha=1)+
+  facet_wrap(~char_name, ncol = 4) +
+  coord_polar(clip = 'off') +
+  labs(x = "", y = "", title = title, caption = "Graphic: Karen Sasmita")+
+  theme(#plot.title = element_text(family = "montserrat"),
+        plot.title=element_textbox_simple(margin=margin(b=10, t = 20, r = 10, l = 10)),
+        strip.text=element_text(color="black", face="bold", size=18, family=title_fam),
+        axis.text.x = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        legend.position = "none", 
+        #panel.grid.major.y = element_line(color = "red",size = 0.5,linetype = 2),
+        #plot.background = element_rect(fill = "#002739", color = NA),
+        panel.grid.minor = element_blank(), 
+        panel.grid.major = element_blank(), 
+        #panel.background= element_blank(), ,
+        strip.background = element_blank(),
+        panel.border = element_blank(),
+        panel.spacing = unit(1,'cm'), 
+        panel.background = element_rect(fill = "transparent",colour = NA),
+        plot.background = element_rect(fill = fig_bg_col, color = NA),
+        plot.caption = element_text(family = txt_fam, color = txt_col, size = 8))
+        #plot.margin = margin(t = 3, r = 1, b = 1, l = 1, unit = "cm"))
+
+p
+
+# path <- here::here("plots", "HP_Personality")
+# ggsave(glue::glue("{path}.pdf"), plot = p, width = 11, height = 8, device = cairo_pdf)
+# pdf_convert(pdf = glue::glue("{path}.pdf"), 
+#             filenames = glue::glue("{path}.png"),
+#             format = "png", dpi = 500)
+```
+
+
